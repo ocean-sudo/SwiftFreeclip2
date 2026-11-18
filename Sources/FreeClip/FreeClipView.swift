@@ -671,6 +671,7 @@ struct FreeClipMenuView: View {
 private extension View {
     @ViewBuilder
     func liquidGlass<S: InsettableShape>(in shape: S, interactive: Bool = false, tint: Color? = nil) -> some View {
+        #if compiler(>=6.2)
         if #available(macOS 26.0, *) {
             let base = tint.map { Glass.clear.tint($0) } ?? Glass.clear
             let glass = interactive ? base.interactive() : base
@@ -680,5 +681,10 @@ private extension View {
                 .background(.ultraThinMaterial, in: shape)
                 .overlay(shape.strokeBorder(.primary.opacity(0.08), lineWidth: 0.75))
         }
+        #else
+        self
+            .background(.ultraThinMaterial, in: shape)
+            .overlay(shape.strokeBorder(.primary.opacity(0.08), lineWidth: 0.75))
+        #endif
     }
 }
