@@ -543,12 +543,16 @@ import ServiceManagement
     }
 }
 
-@main struct FreeClipApp: App {
-    @NSApplicationDelegateAdaptor(StatusBarAppDelegate.self) private var appDelegate
-
-    var body: some Scene {
-        Settings {
-            EmptyView()
+@main
+enum FreeClipMain {
+    @MainActor
+    static func main() {
+        let app = NSApplication.shared
+        app.setActivationPolicy(.accessory)
+        let delegate = StatusBarAppDelegate()
+        app.delegate = delegate
+        withExtendedLifetime(delegate) {
+            app.run()
         }
     }
 }
