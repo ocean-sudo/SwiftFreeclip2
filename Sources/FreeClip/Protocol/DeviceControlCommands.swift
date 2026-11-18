@@ -2,6 +2,7 @@ import Foundation
 
 enum FreeClipCommand {
     static let batteryRead: UInt16 = 0x0108
+    static let batteryNotify: UInt16 = 0x0127
     static let deviceInfoRead: UInt16 = 0x0107
     static let doubleTapRead: UInt16 = 0x0120
     static let doubleTapWrite: UInt16 = 0x011F

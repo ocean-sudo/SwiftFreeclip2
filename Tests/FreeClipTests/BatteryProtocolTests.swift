@@ -99,3 +99,18 @@ import Testing
         PlacedBud(id: 2, level: 91, isCharging: false, placement: .left)
     ])
 }
+
+@Test func decodesBatteryPushNotificationAndResetsPartialBuffer() {
+    let notifyFrame = HuaweiSPPCodec.writeRequest(
+        command: FreeClipCommand.batteryNotify,
+        parameters: [2: [80, 90, 50], 3: [0, 0, 0]]
+    )
+    var decoder = HuaweiSPPCodec()
+    #expect(decoder.receive(Array(notifyFrame.prefix(5))).isEmpty)
+    decoder.reset()
+    let messages = decoder.receive(notifyFrame)
+    #expect(messages.count == 1)
+    #expect(messages.first?.command == FreeClipCommand.batteryNotify)
+    #expect(messages.first?.parameters[2] == [80, 90, 50])
+    #expect(messages.first?.parameters[3] == [0, 0, 0])
+}

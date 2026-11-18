@@ -50,12 +50,10 @@ import ServiceManagement
     private var armedReadbacks: Set<UInt16> = []
     private var settingsRequested = false
     private var batteryRequestSent = false
+    private var lastBatteryAt: Date?
 
     override init() {
         super.init()
-        batteryTimer = Timer.scheduledTimer(withTimeInterval: 25, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.refresh() }
-        }
         discover()
         if devices.count == 1, let device = devices.first {
             connect(device)
@@ -67,20 +65,40 @@ import ServiceManagement
         }
         status = devices.isEmpty ? "未找到已配对的 FreeClip；请先在系统设置中配对" : "选择已配对的设备"
     }
+    private func startBatteryTimer() {
+        guard batteryTimer == nil else { return }
+        let timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.refresh() }
+        }
+        timer.tolerance = 15
+        batteryTimer = timer
+    }
+    private func stopBatteryTimer() {
+        batteryTimer?.invalidate()
+        batteryTimer = nil
+    }
+    func refreshIfStale(maxAge: TimeInterval = 5) {
+        guard isChannelConnected else { return }
+        if let lastBatteryAt, Date().timeIntervalSince(lastBatteryAt) < maxAge {
+            return
+        }
+        refresh()
+    }
     func stop() {
         reconnectTask?.cancel()
         reconnectTask = nil
         selectedDevice = nil
         pendingSDPDevice = nil
-        batteryTimer?.invalidate()
-        batteryTimer = nil
+        stopBatteryTimer()
         let activeChannel = channel
         channel = nil
         activeChannel?.close()
+        decoder.reset()
         values = nil
         chargingStates = nil
         modelIdentifier = nil
         earbudIdentityMap = nil
+        lastBatteryAt = nil
         connectionState.reset()
         status = "未连接"
     }
@@ -165,21 +183,26 @@ import ServiceManagement
             return
         }
         channel = opened
-        for _ in 0..<15 where !opened.isOpen() {
-            Thread.sleep(forTimeInterval: 0.1)
-        }
-        guard opened.isOpen() else {
-            channel = nil
-            self.status = "RFCOMM Channel 1 未打开"
-            scheduleReconnect()
-            return
-        }
-        self.status = "已连接；等待读取电量"
-        connectionState.didConnect()
-        refresh()
         Task { @MainActor [weak self] in
+            guard let self else { return }
+            for _ in 0..<15 where !opened.isOpen() {
+                try? await Task.sleep(nanoseconds: 100_000_000)
+                if Task.isCancelled { return }
+            }
+            guard self.channel === opened, opened.isOpen() else {
+                if self.channel === opened {
+                    self.channel = nil
+                    self.status = "RFCOMM Channel 1 未打开"
+                    self.scheduleReconnect()
+                }
+                return
+            }
+            self.status = "已连接；等待读取电量"
+            self.connectionState.didConnect()
+            self.startBatteryTimer()
+            self.refresh()
             try? await Task.sleep(nanoseconds: 500_000_000)
-            guard let self, self.channel?.isOpen() == true else { return }
+            guard self.channel?.isOpen() == true else { return }
             _ = self.sendFrame(HuaweiSPPCodec.readRequest(
                 command: FreeClipCommand.deviceInfoRead,
                 parameterIDs: Array(UInt8(0)..<UInt8(32))
@@ -414,11 +437,14 @@ import ServiceManagement
     nonisolated func rfcommChannelClosed(_ channel: IOBluetoothRFCOMMChannel!) {
         Task { @MainActor in
             self.channel = nil
+            self.stopBatteryTimer()
+            self.decoder.reset()
             self.earbudIdentityMap = nil
             self.connectionState.didDisconnect()
             self.values = nil
             self.chargingStates = nil
             self.modelIdentifier = nil
+            self.lastBatteryAt = nil
             self.status = "连接已断开"
             self.scheduleReconnect()
         }
@@ -426,12 +452,13 @@ import ServiceManagement
     private func receive(_ bytes: [UInt8]) {
         for message in decoder.receive(bytes) {
             switch message.command {
-            case FreeClipCommand.batteryRead:
+            case FreeClipCommand.batteryRead, FreeClipCommand.batteryNotify:
                 lastBatteryParameters = message.parameters
                 if let battery = message.parameters[2], battery.count == 3 {
                     let previousCharging = chargingStates
                     values = battery
                     chargingStates = message.parameters[3]
+                    lastBatteryAt = Date()
                     status = "已收到电量与佩戴状态"
                     if previousCharging != chargingStates {
                         _ = sendFrame(HuaweiSPPCodec.readRequest(
@@ -564,22 +591,29 @@ final class StatusBarAppDelegate: NSObject, NSApplicationDelegate {
     private var panel: NSPanel?
     private var titleCancellable: AnyCancellable?
     private var outsideClickMonitor: Any?
+    private var lastDisplayedTitle: String = ""
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = item.button {
             button.image = FreeClipStatusIcon.templateImage()
             button.imagePosition = .imageLeading
-            button.title = controller.menuBarTitle.isEmpty ? "" : " \(controller.menuBarTitle)"
+            let initial = controller.menuBarTitle.isEmpty ? "" : " \(controller.menuBarTitle)"
+            button.title = initial
+            lastDisplayedTitle = initial
             button.target = self
             button.action = #selector(togglePanel)
         }
         statusItem = item
 
-        titleCancellable = controller.$values.receive(on: RunLoop.main).sink { [weak self] _ in
+        titleCancellable = controller.$values.sink { [weak self] _ in
             guard let self, let button = self.statusItem?.button else { return }
-            let title = self.controller.menuBarTitle
-            button.title = title.isEmpty ? "" : " \(title)"
+            let raw = self.controller.menuBarTitle
+            let next = raw.isEmpty ? "" : " \(raw)"
+            if next != self.lastDisplayedTitle {
+                self.lastDisplayedTitle = next
+                button.title = next
+            }
         }
     }
 
@@ -604,11 +638,14 @@ final class StatusBarAppDelegate: NSObject, NSApplicationDelegate {
         panel.setFrameOrigin(origin)
         panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        controller.refreshIfStale()
         startOutsideClickMonitor()
     }
 
     private func closePanel() {
         panel?.orderOut(nil)
+        panel?.contentView = nil
+        panel = nil
         stopOutsideClickMonitor()
     }
 

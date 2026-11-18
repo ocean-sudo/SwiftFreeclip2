@@ -217,7 +217,7 @@ struct HuaweiSPPCodec {
         readRequest(command: 0x0108, parameterIDs: [1, 2, 3])
     }
 
-    mutating func reset() { buffer.removeAll(keepingCapacity: true) }
+    mutating func reset() { buffer.removeAll(keepingCapacity: false) }
 
     mutating func receive(_ bytes: [UInt8]) -> [HuaweiSPPMessage] {
         buffer.append(contentsOf: bytes)
