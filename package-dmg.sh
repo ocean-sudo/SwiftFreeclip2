@@ -15,6 +15,12 @@ trap 'rm -rf "$STAGE"' EXIT
 
 cp -R "$APP" "$STAGE/FreeClip.app"
 ln -s /Applications "$STAGE/Applications"
+if [[ -f "$ROOT/Assets/AppIcon.icns" ]]; then
+    cp "$ROOT/Assets/AppIcon.icns" "$STAGE/.VolumeIcon.icns"
+    if command -v SetFile >/dev/null 2>&1; then
+        SetFile -a C "$STAGE"
+    fi
+fi
 
 cat > "$STAGE/安装与自签说明.txt" <<'EOF'
 FreeClip 2 安装与命令行自签说明

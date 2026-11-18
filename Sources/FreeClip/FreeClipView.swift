@@ -481,6 +481,16 @@ struct FreeClipMenuView: View {
 
     private var devicesTab: some View {
         VStack(alignment: .leading, spacing: 10) {
+            glassCard(title: "通用", systemImage: "gearshape") {
+                Toggle("开机自动启动", isOn: Binding(
+                    get: { controller.launchAtLogin },
+                    set: { controller.setLaunchAtLogin($0) }
+                ))
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .font(.subheadline)
+            }
+
             glassCard(title: "双设备连接", systemImage: "laptopcomputer.and.iphone") {
                 VStack(spacing: 10) {
                     HStack {

@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import ServiceManagement
 @preconcurrency import IOBluetooth
 
 @MainActor final class Controller: NSObject, ObservableObject, IOBluetoothRFCOMMChannelDelegate, IOBluetoothDeviceAsyncCallbacks {
@@ -25,6 +26,7 @@ import Combine
     @Published var swipeAction: Int?
     @Published var dualConnectEnabled: Bool?
     @Published var dualConnectDevices: [DualConnectDevice] = []
+    @Published var launchAtLogin: Bool = SMAppService.mainApp.status == .enabled
     var leftBatteryLevel: UInt8? { BatteryReadout.leftLevel(values, chargingStates: chargingStates) }
     var rightBatteryLevel: UInt8? { BatteryReadout.rightLevel(values, chargingStates: chargingStates) }
     var caseBatteryLevel: UInt8? { BatteryReadout.caseLevel(values) }
@@ -202,6 +204,19 @@ import Combine
             if devices.count == 1, let device = devices.first {
                 connect(device)
             }
+        }
+    }
+    func setLaunchAtLogin(_ enabled: Bool) {
+        do {
+            if enabled {
+                try SMAppService.mainApp.register()
+            } else {
+                try SMAppService.mainApp.unregister()
+            }
+            launchAtLogin = SMAppService.mainApp.status == .enabled
+        } catch {
+            launchAtLogin = SMAppService.mainApp.status == .enabled
+            status = "开机启动设置失败：需从 .app 运行"
         }
     }
     func closeChannelForTesting() {
