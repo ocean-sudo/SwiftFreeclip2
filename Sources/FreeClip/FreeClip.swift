@@ -644,8 +644,6 @@ final class StatusBarAppDelegate: NSObject, NSApplicationDelegate {
 
     private func closePanel() {
         panel?.orderOut(nil)
-        panel?.contentView = nil
-        panel = nil
         stopOutsideClickMonitor()
     }
 
