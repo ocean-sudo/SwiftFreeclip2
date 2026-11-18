@@ -457,7 +457,7 @@ struct FreeClipMenuView: View {
         value: Int?,
         options: [Int],
         titles: [Int: String] = [:],
-        onChange: @escaping @MainActor @Sendable (Int) -> Void
+        onChange: @escaping (Int) -> Void
     ) -> some View {
         HStack {
             Text(title)
@@ -465,7 +465,7 @@ struct FreeClipMenuView: View {
             Spacer()
             Picker("", selection: Binding(
                 get: { value ?? Int.min },
-                set: onChange
+                set: { onChange($0) }
             )) {
                 ForEach(options, id: \.self) { action in
                     Text(titles[action] ?? FreeClipAction.title(for: action)).tag(action)
