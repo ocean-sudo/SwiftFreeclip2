@@ -88,7 +88,7 @@ struct FreeClipMenuView: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .liquidGlass(in: Capsule())
+            .liquidGlassCapsule()
 
             Button {
                 if controller.isChannelConnected {
@@ -102,7 +102,7 @@ struct FreeClipMenuView: View {
                     .frame(width: 44, height: 44)
             }
             .buttonStyle(.plain)
-            .liquidGlass(in: Circle(), interactive: true)
+            .liquidGlassCircle(interactive: true)
             .help(controller.isChannelConnected ? "刷新电量与状态" : "重新连接耳机")
         }
     }
@@ -126,7 +126,7 @@ struct FreeClipMenuView: View {
                         .padding(.vertical, 7)
                 }
                 .buttonStyle(.plain)
-                .liquidGlass(in: Capsule(), interactive: true, tint: .accentColor)
+                .liquidGlassCapsule(interactive: true, tint: .accentColor)
             }
 
             Spacer()
@@ -140,7 +140,7 @@ struct FreeClipMenuView: View {
                     .padding(.vertical, 7)
             }
             .buttonStyle(.plain)
-            .liquidGlass(in: Capsule(), interactive: true)
+            .liquidGlassCapsule(interactive: true)
             .keyboardShortcut("q", modifiers: .command)
         }
     }
@@ -215,7 +215,7 @@ struct FreeClipMenuView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .liquidGlass(in: Capsule())
+            .liquidGlassCapsule()
 
             if !controller.dualConnectDevices.isEmpty {
                 glassCard(title: "当前连接设备", systemImage: "dot.radiowaves.left.and.right") {
@@ -292,7 +292,7 @@ struct FreeClipMenuView: View {
         .buttonStyle(.plain)
         .disabled(isDisabled)
         .opacity(isDisabled ? 0.55 : 1)
-        .liquidGlass(in: Capsule(), interactive: !isDisabled)
+        .liquidGlassCapsule(interactive: !isDisabled)
     }
 
     private func budCard(_ bud: PlacedBud) -> some View {
@@ -329,7 +329,7 @@ struct FreeClipMenuView: View {
         }
         .padding(11)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .liquidGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .liquidGlassRounded(cornerRadius: 20)
     }
 
     private func caseCard(level: UInt8?, isCharging: Bool) -> some View {
@@ -367,7 +367,7 @@ struct FreeClipMenuView: View {
         }
         .padding(11)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .liquidGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .liquidGlassRounded(cornerRadius: 20)
     }
 
     private func placementBadge(_ placement: BudPlacement) -> some View {
@@ -642,7 +642,7 @@ struct FreeClipMenuView: View {
         }
         .padding(13)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .liquidGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .liquidGlassRounded(cornerRadius: 20)
     }
 
     private func displayBattery(_ value: UInt8) -> String {
@@ -670,12 +670,47 @@ struct FreeClipMenuView: View {
 
 private extension View {
     @ViewBuilder
-    func liquidGlass<S: InsettableShape>(in shape: S, interactive: Bool = false, tint: Color? = nil) -> some View {
+    func liquidGlassCapsule(interactive: Bool = false, tint: Color? = nil) -> some View {
         #if compiler(>=6.2)
         if #available(macOS 26.0, *) {
             let base = tint.map { Glass.clear.tint($0) } ?? Glass.clear
             let glass = interactive ? base.interactive() : base
-            self.glassEffect(glass, in: shape)
+            self.glassEffect(glass, in: Capsule())
+        } else {
+            self
+                .background(.ultraThinMaterial, in: Capsule())
+                .overlay(Capsule().strokeBorder(.primary.opacity(0.08), lineWidth: 0.75))
+        }
+        #else
+        self
+            .background(.ultraThinMaterial, in: Capsule())
+            .overlay(Capsule().strokeBorder(.primary.opacity(0.08), lineWidth: 0.75))
+        #endif
+    }
+
+    @ViewBuilder
+    func liquidGlassCircle(interactive: Bool = false) -> some View {
+        #if compiler(>=6.2)
+        if #available(macOS 26.0, *) {
+            self.glassEffect(interactive ? Glass.clear.interactive() : Glass.clear, in: Circle())
+        } else {
+            self
+                .background(.ultraThinMaterial, in: Circle())
+                .overlay(Circle().strokeBorder(.primary.opacity(0.08), lineWidth: 0.75))
+        }
+        #else
+        self
+            .background(.ultraThinMaterial, in: Circle())
+            .overlay(Circle().strokeBorder(.primary.opacity(0.08), lineWidth: 0.75))
+        #endif
+    }
+
+    @ViewBuilder
+    func liquidGlassRounded(cornerRadius: CGFloat) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        #if compiler(>=6.2)
+        if #available(macOS 26.0, *) {
+            self.glassEffect(Glass.clear, in: shape)
         } else {
             self
                 .background(.ultraThinMaterial, in: shape)
