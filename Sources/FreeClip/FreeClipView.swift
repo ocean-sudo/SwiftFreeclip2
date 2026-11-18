@@ -486,7 +486,7 @@ struct FreeClipMenuView: View {
                     HStack {
                         Toggle("启用双设备连接", isOn: Binding(
                             get: { controller.dualConnectEnabled ?? false },
-                            set: controller.setDualConnectEnabled
+                            set: { controller.setDualConnectEnabled($0) }
                         ))
                         .toggleStyle(.switch)
                         .controlSize(.small)
