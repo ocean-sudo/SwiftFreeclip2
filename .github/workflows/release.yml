@@ -1,0 +1,67 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run protocol smoke tests
+        run: ./test-protocol.sh
+
+      - name: Run Swift Testing unit tests
+        run: ./test-swift-testing.sh
+
+      - name: Build FreeClip.app
+        run: ./build-app.sh
+
+      - name: Package DMG
+        env:
+          TAG_NAME: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
+        run: |
+          chmod +x ./package-dmg.sh
+          ./package-dmg.sh ".build/FreeClip.app" ".build/FreeClip-${TAG_NAME}.dmg"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
+        run: |
+          DMG_PATH=".build/FreeClip-${TAG_NAME}.dmg"
+          NOTES_FILE="$(mktemp)"
+          cat > "$NOTES_FILE" <<'EOF'
+          ## 安装说明
+
+          1. 下载下方 `.dmg` 镜像并双击挂载。
+          2. 将 `FreeClip.app` 拖入 `Applications`（应用程序）文件夹。
+
+          ## 命令行自签说明（macOS 拦截时执行）
+
+          当前构建仅包含 ad-hoc 签名，未经 Apple Developer ID 公证。若首次启动提示无法打开或权限异常，可在终端运行以下命令清除隔离属性并重新本地自签：
+
+          ```bash
+          xattr -cr /Applications/FreeClip.app
+          codesign --force --deep --sign - \
+            --identifier org.freeclip.FreeClip2 \
+            --requirements '=designated => identifier "org.freeclip.FreeClip2"' \
+            /Applications/FreeClip.app
+          ```
+          EOF
+          gh release create "$TAG_NAME" "$DMG_PATH" \
+            --title "FreeClip 2 ${TAG_NAME}" \
+            --notes-file "$NOTES_FILE"
